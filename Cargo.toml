@@ -3,7 +3,11 @@ name = "wkb-raster"
 version = "0.1.0"
 authors = ["Felix Schütt <felix.schuett@maps4print.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Library to serialize raster data to the PostGIS RASTER Well Known Binary format"
+repository = "https://github.com/fschutt/wkb-raster"
+keywords = ["raster", "wkb", "postgis", "postgres", "sql"]
+categories = ["database"]
+readme = "README.md"
+license = "MIT"
 
 [dependencies]
