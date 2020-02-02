@@ -41,7 +41,7 @@
 //! };
 //! 
 //! assert_eq!(
-//!     raster.to_string(), 
+//!     raster.to_wkb_string(), 
 //!     String::from("00000000013FF00000000000003FF00000000000000000000000000000000000000000000000000000000000000000000000000000000010E600020002040000010100")
 //! );
 //! ```
@@ -203,8 +203,8 @@ impl Raster {
     /// Outputs the raster as a Well-Known-Binary string, ready to be used in SQL statements
     pub fn to_wkb_string(self) -> String {
         match self.endian {
-            Endian::Big => self.to_string_big_endian(),
-            Endian::Little => self.to_string_little_endian(),
+            Endian::Big => self.to_wkb_string_big_endian(),
+            Endian::Little => self.to_wkb_string_little_endian(),
         }
     }
 
@@ -251,7 +251,7 @@ impl Raster {
             string_bytes.append(&mut band.data.get_pixtype().get_nodata_value_as_string_big_endian());
 
             // write raster data
-            string_bytes.append(&mut band.data.to_string_big_endian());
+            string_bytes.append(&mut band.data.to_wkb_string_big_endian());
         }
 
         unsafe { String::from_utf8_unchecked(string_bytes) }
@@ -303,7 +303,7 @@ impl Raster {
             string_bytes.append(&mut band.data.get_pixtype().get_nodata_value_as_string_little_endian());
 
             // write raster data
-            string_bytes.append(&mut band.data.to_string_little_endian());
+            string_bytes.append(&mut band.data.to_wkb_string_little_endian());
         }
 
         unsafe { String::from_utf8_unchecked(string_bytes) }
