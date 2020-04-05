@@ -166,8 +166,8 @@
 
 use std::path::PathBuf;
 
-mod big_endian;
-mod little_endian;
+pub mod big_endian;
+pub mod little_endian;
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Hash, Eq, Ord)]
 pub enum ParseError<'a> {
