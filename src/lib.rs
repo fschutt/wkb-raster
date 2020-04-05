@@ -169,6 +169,12 @@ use std::path::PathBuf;
 mod big_endian;
 mod little_endian;
 
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Hash, Eq, Ord)]
+pub enum ParseError<'a> {
+    WrongInputSize { expected_len: u8, got: &'a [u8] },
+    UnableToParseBool([u8;2], u8),
+}
+
 /// Raster data 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Raster {
