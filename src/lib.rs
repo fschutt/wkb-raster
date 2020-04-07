@@ -166,12 +166,14 @@
 use std::path::PathBuf;
 use std::ffi::CString;
 
+#[macro_use]
+mod parse_memory_data;
 pub mod big_endian;
 pub mod little_endian;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Hash, Eq, Ord)]
 pub enum ParseError<'a> {
-    WrongInputSize { expected_len: u8, got: &'a [u8] },
+    WrongInputSize { expected_len: usize, got: &'a [u8] },
     UnableToParseBool(BoolParseError),
     NoEndiannessGiven([u8;2]),
     InvalidPixelType(u8),
@@ -222,7 +224,7 @@ pub fn take_slice_1_byte<'a>(input: &'a [u8]) -> Result<([u8;2], &'a [u8]), Pars
     use self::ParseError::*;
     const MIN_LEN: usize = 2;
     if input.len() < MIN_LEN { 
-        return Err(WrongInputSize { expected_len: MIN_LEN as u8, got: input });
+        return Err(WrongInputSize { expected_len: MIN_LEN, got: input });
     }
     unsafe {
         let a = input.get_unchecked(0);
@@ -236,7 +238,7 @@ pub fn take_slice_2_bytes<'a>(input: &'a [u8]) -> Result<([u8;4], &'a [u8]), Par
     use self::ParseError::*;
     const MIN_LEN: usize = 4;
     if input.len() < MIN_LEN { 
-        return Err(WrongInputSize { expected_len: MIN_LEN as u8, got: input });
+        return Err(WrongInputSize { expected_len: MIN_LEN, got: input });
     }
     unsafe {
         let a = input.get_unchecked(0);
@@ -252,7 +254,7 @@ pub fn take_slice_4_bytes<'a>(input: &'a [u8]) -> Result<([u8;8], &'a [u8]), Par
     use self::ParseError::*;
     const MIN_LEN: usize = 8;
     if input.len() < MIN_LEN { 
-        return Err(WrongInputSize { expected_len: MIN_LEN as u8, got: input });
+        return Err(WrongInputSize { expected_len: MIN_LEN, got: input });
     }
     unsafe {
         let a = input.get_unchecked(0);
@@ -272,7 +274,7 @@ pub fn take_slice_8_bytes<'a>(input: &'a [u8]) -> Result<([u8;16], &'a [u8]), Pa
     use self::ParseError::*;
     const MIN_LEN: usize = 16;
     if input.len() < MIN_LEN { 
-        return Err(WrongInputSize { expected_len: MIN_LEN as u8, got: input });
+        return Err(WrongInputSize { expected_len: MIN_LEN, got: input });
     }
     unsafe {
         let a = input.get_unchecked(0);
@@ -839,116 +841,101 @@ impl RasterDataSource {
 
     fn parse_memory_big_endian<'a>(input: &'a [u8], pixtype: PixType, width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
 
-        fn parse_memory_data_bool_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<bool>>, &'a [u8]), ParseError<'a>> {
-            Ok((vec![vec![]], input))
-        }
+        parse_memory_data_fns!(
+            crate::big_endian,
 
-        fn parse_memory_data_uint2_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<u8>>, &'a [u8]), ParseError<'a>> {
-            Ok((vec![vec![]], input))
-        }
+            parse_memory_data_bool_be,
+            parse_memory_data_uint2_be,
+            parse_memory_data_uint4_be,
+            parse_memory_data_int8_be,
+            parse_memory_data_uint8_be,
+            parse_memory_data_int16_be,
+            parse_memory_data_uint16_be,
+            parse_memory_data_int32_be,
+            parse_memory_data_uint32_be,
+            parse_memory_data_f32_be,
+            parse_memory_data_f64_be,
 
-        fn parse_memory_data_uint4_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<u8>>, &'a [u8]), ParseError<'a>> {
-            Ok((vec![vec![]], input))
-        }
+            parse_bool_be,
+            parse_uint2_be,
+            parse_uint4_be,
+            parse_i8_be,
+            parse_u8_be,
+            parse_i16_be,
+            parse_u16_be,
+            parse_i32_be,
+            parse_u32_be,
+            parse_f32_be,
+            parse_f64_be,
+        );
+        let ret = gen_parse_function_body!(
+            parse_memory_data_bool_be,
+            parse_memory_data_uint2_be,
+            parse_memory_data_uint4_be,
+            parse_memory_data_int8_be,
+            parse_memory_data_uint8_be,
+            parse_memory_data_int16_be,
+            parse_memory_data_uint16_be,
+            parse_memory_data_int32_be,
+            parse_memory_data_uint32_be,
+            parse_memory_data_f32_be,
+            parse_memory_data_f64_be,
 
-        fn parse_memory_data_int8_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<i8>>, &'a [u8]), ParseError<'a>> {
-            Ok((vec![vec![]], input))
-        }
-
-        fn parse_memory_data_uint8_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<u8>>, &'a [u8]), ParseError<'a>> {
-            Ok((vec![vec![]], input))
-        }
-
-        fn parse_memory_data_int16_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<i16>>, &'a [u8]), ParseError<'a>> {
-            Ok((vec![vec![]], input))
-        }
-
-        fn parse_memory_data_uint16_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<u16>>, &'a [u8]), ParseError<'a>> {
-            Ok((vec![vec![]], input))
-        }
-
-        fn parse_memory_data_int32_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<i32>>, &'a [u8]), ParseError<'a>> {
-            Ok((vec![vec![]], input))
-        }
-
-        fn parse_memory_data_uint32_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<u32>>, &'a [u8]), ParseError<'a>> {
-            Ok((vec![vec![]], input))
-        }
-
-        fn parse_memory_data_f32_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<f32>>, &'a [u8]), ParseError<'a>> {
-            Ok((vec![vec![]], input))
-        }
-
-        fn parse_memory_data_f64_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<f64>>, &'a [u8]), ParseError<'a>> {
-            Ok((vec![vec![]], input))
-        }
-
-        let mut input = input;
-
-        let data = match pixtype {
-            PixType::Bool1Bit(nodata)   => {
-                let (data, new_memory_input) = parse_memory_data_bool_be(input, width, height)?;
-                input = new_memory_input;
-                InMemoryRasterData::Bool1Bit { data, nodata }
-            },
-            PixType::UInt2(nodata)      => {
-                let (data, new_memory_input) = parse_memory_data_uint2_be(input, width, height)?;
-                input = new_memory_input;
-                InMemoryRasterData::UInt2 { data, nodata }
-            },
-            PixType::UInt4(nodata)      => {
-                let (data, new_memory_input) = parse_memory_data_uint4_be(input, width, height)?;
-                input = new_memory_input;
-                InMemoryRasterData::UInt4 { data, nodata }
-            },
-            PixType::Int8(nodata)       => {
-                let (data, new_memory_input) = parse_memory_data_int8_be(input, width, height)?;
-                input = new_memory_input;
-                InMemoryRasterData::Int8 { data, nodata }
-            },
-            PixType::UInt8(nodata)      => {
-                let (data, new_memory_input) = parse_memory_data_uint8_be(input, width, height)?;
-                input = new_memory_input;
-                InMemoryRasterData::UInt8 { data, nodata }
-            },
-            PixType::Int16(nodata)      => {
-                let (data, new_memory_input) = parse_memory_data_int16_be(input, width, height)?;
-                input = new_memory_input;
-                InMemoryRasterData::Int16 { data, nodata }
-            },
-            PixType::UInt16(nodata)     => {
-                let (data, new_memory_input) = parse_memory_data_uint16_be(input, width, height)?;
-                input = new_memory_input;
-                InMemoryRasterData::UInt16 { data, nodata }
-            },
-            PixType::Int32(nodata)      => {
-                let (data, new_memory_input) = parse_memory_data_int32_be(input, width, height)?;
-                input = new_memory_input;
-                InMemoryRasterData::Int32 { data, nodata }
-            },
-            PixType::UInt32(nodata)     => {
-                let (data, new_memory_input) = parse_memory_data_uint32_be(input, width, height)?;
-                input = new_memory_input;
-                InMemoryRasterData::UInt32 { data, nodata }
-            },
-            PixType::Float32(nodata)    => {
-                let (data, new_memory_input) = parse_memory_data_f32_be(input, width, height)?;
-                input = new_memory_input;
-                InMemoryRasterData::Float32 { data, nodata }
-            },
-            PixType::Float64(nodata)    => {
-                let (data, new_memory_input) = parse_memory_data_f64_be(input, width, height)?;
-                input = new_memory_input;
-                InMemoryRasterData::Float64 { data, nodata }
-            },
-        };
-
-        Ok((RasterDataSource::InMemory(data), input))
+            input,
+            pixtype,
+            width,
+            height,
+        );
+        ret
     }
 
     fn parse_memory_little_endian<'a>(input: &'a [u8], pixtype: PixType, width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
-        unimplemented!()
-        // Ok((RasterDataSource::InMemory(data), input))
+        parse_memory_data_fns!(
+            crate::little_endian,
+
+            parse_memory_data_bool_le,
+            parse_memory_data_uint2_le,
+            parse_memory_data_uint4_le,
+            parse_memory_data_int8_le,
+            parse_memory_data_uint8_le,
+            parse_memory_data_int16_le,
+            parse_memory_data_uint16_le,
+            parse_memory_data_int32_le,
+            parse_memory_data_uint32_le,
+            parse_memory_data_f32_le,
+            parse_memory_data_f64_le,
+
+            parse_bool_le,
+            parse_uint2_le,
+            parse_uint4_le,
+            parse_i8_le,
+            parse_u8_le,
+            parse_i16_le,
+            parse_u16_le,
+            parse_i32_le,
+            parse_u32_le,
+            parse_f32_le,
+            parse_f64_le,
+        );
+        let ret = gen_parse_function_body!(
+            parse_memory_data_bool_le,
+            parse_memory_data_uint2_le,
+            parse_memory_data_uint4_le,
+            parse_memory_data_int8_le,
+            parse_memory_data_uint8_le,
+            parse_memory_data_int16_le,
+            parse_memory_data_uint16_le,
+            parse_memory_data_int32_le,
+            parse_memory_data_uint32_le,
+            parse_memory_data_f32_le,
+            parse_memory_data_f64_le,
+            
+            input,
+            pixtype,
+            width,
+            height,
+        );
+        ret
     }
 }
 

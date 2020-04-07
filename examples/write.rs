@@ -3,8 +3,8 @@ use wkb_raster::{Raster, RasterBand, RasterDataSource, InMemoryRasterData, Endia
 fn main() {
     // 2x2 image bytes, u8 format
     let bytes = vec![
-        vec![0, 1],
-        vec![1, 0],
+        vec![34, 40],
+        vec![56, 0],
     ];
 
     let raster = Raster {
