@@ -173,7 +173,11 @@ pub mod little_endian;
 pub enum ParseError<'a> {
     WrongInputSize { expected_len: u8, got: &'a [u8] },
     UnableToParseBool([u8;2], u8),
+    NoEndiannessGiven([u8;2])
 }
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Hash, Eq, Ord)]
+pub struct BoolParseError([u8;2], u8);
 
 /// Raster data 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -204,6 +208,90 @@ pub struct Raster {
     pub bands: Vec<RasterBand>,
 }
 
+#[inline]
+pub fn take_slice_1_byte<'a>(input: &'a [u8]) -> Result<([u8;2], &'a [u8]), ParseError<'a>> {
+    use self::ParseError::*;
+    const MIN_LEN: usize = 2;
+    if input.len() < MIN_LEN { 
+        return Err(WrongInputSize { expected_len: MIN_LEN as u8, got: input });
+    }
+    unsafe {
+        let a = input.get_unchecked(0);
+        let b = input.get_unchecked(1);
+        Ok(([*a, *b], &input[MIN_LEN..]))
+    }
+}
+
+#[inline]
+pub fn take_slice_2_bytes<'a>(input: &'a [u8]) -> Result<([u8;4], &'a [u8]), ParseError<'a>> {
+    use self::ParseError::*;
+    const MIN_LEN: usize = 4;
+    if input.len() < MIN_LEN { 
+        return Err(WrongInputSize { expected_len: MIN_LEN as u8, got: input });
+    }
+    unsafe {
+        let a = input.get_unchecked(0);
+        let b = input.get_unchecked(1);
+        let c = input.get_unchecked(2);
+        let d = input.get_unchecked(3);
+        Ok(([*a, *b, *c, *d], &input[MIN_LEN..]))
+    }
+}
+
+#[inline]
+pub fn take_slice_4_bytes<'a>(input: &'a [u8]) -> Result<([u8;8], &'a [u8]), ParseError<'a>> {
+    use self::ParseError::*;
+    const MIN_LEN: usize = 8;
+    if input.len() < MIN_LEN { 
+        return Err(WrongInputSize { expected_len: MIN_LEN as u8, got: input });
+    }
+    unsafe {
+        let a = input.get_unchecked(0);
+        let b = input.get_unchecked(1);
+        let c = input.get_unchecked(2);
+        let d = input.get_unchecked(3);
+        let e = input.get_unchecked(4);
+        let f = input.get_unchecked(5);
+        let g = input.get_unchecked(6);
+        let h = input.get_unchecked(7);
+        Ok(([*a, *b, *c, *d, *e, *f, *g, *h], &input[MIN_LEN..]))
+    }
+}
+
+#[inline]
+pub fn take_slice_8_bytes<'a>(input: &'a [u8]) -> Result<([u8;16], &'a [u8]), ParseError<'a>> {
+    use self::ParseError::*;
+    const MIN_LEN: usize = 16;
+    if input.len() < MIN_LEN { 
+        return Err(WrongInputSize { expected_len: MIN_LEN as u8, got: input });
+    }
+    unsafe {
+        let a = input.get_unchecked(0);
+        let b = input.get_unchecked(1);
+        let c = input.get_unchecked(2);
+        let d = input.get_unchecked(3);
+        let e = input.get_unchecked(4);
+        let f = input.get_unchecked(5);
+        let g = input.get_unchecked(6);
+        let h = input.get_unchecked(7);
+
+        let i = input.get_unchecked(8);
+        let j = input.get_unchecked(9);
+        let k = input.get_unchecked(10);
+        let l = input.get_unchecked(11);
+        let m = input.get_unchecked(12);
+        let n = input.get_unchecked(13);
+        let o = input.get_unchecked(14);
+        let p = input.get_unchecked(15);
+
+        Ok((
+            [*a, *b, *c, *d, *e, *f, *g, *h,
+             *i, *j, *k, *l, *m, *n, *o, *p], 
+        &input[MIN_LEN..]
+        ))
+    }
+}
+
 impl Raster {
 
     /// Outputs the raster as a Well-Known-Binary string, ready to be used in SQL statements
@@ -212,6 +300,120 @@ impl Raster {
             Endian::Big => self.to_wkb_string_big_endian(),
             Endian::Little => self.to_wkb_string_little_endian(),
         }
+    }
+
+    pub fn from_wkb_string<'a>(string_bytes: &'a [u8]) -> Result<Self, ParseError<'a>> {
+        use self::ParseError::*;
+        match take_slice_1_byte(string_bytes)? {
+            ([b'0', b'0'], input) => Self::from_wkb_string_big_endian(input),
+            ([b'0', b'1'], input) => Self::from_wkb_string_little_endian(input),
+            (other, _) => Err(NoEndiannessGiven(other)),
+        }
+    }
+
+    fn from_wkb_string_big_endian<'a>(input: &'a [u8]) -> Result<Self, ParseError<'a>> {
+
+        use crate::big_endian::*;
+        
+        let (version_bytes, input) = take_slice_2_bytes(input)?;
+        let version = parse_u16_be(version_bytes);
+
+        let (nbands_bytes, input) = take_slice_2_bytes(input)?;
+        let nbands = parse_u16_be(nbands_bytes);
+
+        let (scale_x_bytes, input) = take_slice_8_bytes(input)?;
+        let scale_x = parse_f64_be(scale_x_bytes);
+
+        let (scale_y_bytes, input) = take_slice_8_bytes(input)?;
+        let scale_y = parse_f64_be(scale_y_bytes);
+
+        let (ip_x_bytes, input) = take_slice_8_bytes(input)?;
+        let ip_x = parse_f64_be(ip_x_bytes);
+
+        let (ip_y_bytes, input) = take_slice_8_bytes(input)?;
+        let ip_y = parse_f64_be(ip_y_bytes);
+
+        let (skew_x_bytes, input) = take_slice_8_bytes(input)?;
+        let skew_x = parse_f64_be(skew_x_bytes);
+
+        let (skew_y_bytes, input) = take_slice_8_bytes(input)?;
+        let skew_y = parse_f64_be(skew_y_bytes);
+
+        let (srid_bytes, input) = take_slice_4_bytes(input)?;
+        let srid = parse_i32_be(srid_bytes);
+        
+        let (width_bytes, input) = take_slice_2_bytes(input)?;
+        let width = parse_u16_be(width_bytes);
+
+        let (height_bytes, input) = take_slice_2_bytes(input)?;
+        let height = parse_u16_be(height_bytes);
+
+        Ok(Raster {
+            endian: Endian::Big,
+            version,
+            scale_x,
+            scale_y,
+            ip_x,
+            ip_y,
+            skew_x,
+            skew_y,
+            srid,
+            width,
+            height,
+            bands: Vec::new(),
+        })
+    }
+
+    fn from_wkb_string_little_endian<'a>(input: &'a [u8]) -> Result<Self, ParseError<'a>> {
+        use crate::little_endian::*;
+        
+        let (version_bytes, input) = take_slice_2_bytes(input)?;
+        let version = parse_u16_le(version_bytes);
+
+        let (nbands_bytes, input) = take_slice_2_bytes(input)?;
+        let nbands = parse_u16_le(nbands_bytes);
+
+        let (scale_x_bytes, input) = take_slice_8_bytes(input)?;
+        let scale_x = parse_f64_le(scale_x_bytes);
+
+        let (scale_y_bytes, input) = take_slice_8_bytes(input)?;
+        let scale_y = parse_f64_le(scale_y_bytes);
+
+        let (ip_x_bytes, input) = take_slice_8_bytes(input)?;
+        let ip_x = parse_f64_le(ip_x_bytes);
+
+        let (ip_y_bytes, input) = take_slice_8_bytes(input)?;
+        let ip_y = parse_f64_le(ip_y_bytes);
+
+        let (skew_x_bytes, input) = take_slice_8_bytes(input)?;
+        let skew_x = parse_f64_le(skew_x_bytes);
+
+        let (skew_y_bytes, input) = take_slice_8_bytes(input)?;
+        let skew_y = parse_f64_le(skew_y_bytes);
+
+        let (srid_bytes, input) = take_slice_4_bytes(input)?;
+        let srid = parse_i32_le(srid_bytes);
+        
+        let (width_bytes, input) = take_slice_2_bytes(input)?;
+        let width = parse_u16_le(width_bytes);
+
+        let (height_bytes, input) = take_slice_2_bytes(input)?;
+        let height = parse_u16_le(height_bytes);
+
+        Ok(Raster {
+            endian: Endian::Little,
+            version,
+            scale_x,
+            scale_y,
+            ip_x,
+            ip_y,
+            skew_x,
+            skew_y,
+            srid,
+            width,
+            height,
+            bands: Vec::new(),
+        })
     }
 
     fn to_wkb_string_big_endian(self) -> String {

@@ -1,18 +1,7 @@
-use wkb_raster::big_endian as be;
+use wkb_raster::Raster;
 
 fn main() {
-
-    println!("N48E008:\n");
-
-    println!("written scaleX:\t{:?}", be::parse_f64_be(b"37AFEAA3AF484B3F"));
-    println!("written scaleY:\t{:?}", be::parse_f64_be(b"37AFEAA3AF484B3F"));
-    println!("written ipX:\t{:?}", be::parse_f64_be(b"0000000000002040"));
-    println!("written ipY:\t{:?}", be::parse_f64_be(b"0000000000804840"));
-    
-    println!("\nshould be:\n");
-    
-    println!("scaleX:\t{:?}", be::parse_f64_be(b"4F1BE8B4814E4B3F"));
-    println!("scaleY:\t{:?}", be::parse_f64_be(b"4F1BE8B4814E4BBF"));
-    println!("ipX:\t{:?}", be::parse_f64_be(b"602CF9C592FF1F40"));
-    println!("ipY:\t{:?}", be::parse_f64_be(b"74DA40A70D804840"));
+    let s = b"0000000001407F4000000000003FF00000000000000000000000000000000000000000000000000000000000000000000000000000000010E600020002040000010100";
+    let raster = Raster::from_wkb_string(&s[..]);
+    println!("raster: {:#?}", raster);
 }
