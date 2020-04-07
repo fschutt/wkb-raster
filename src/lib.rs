@@ -34,8 +34,7 @@
 //!         data: RasterDataSource::InMemory(
 //!             InMemoryRasterData::UInt8 {
 //!                 data: bytes,
-//!                 nodata: None,
-//!             }
+//!                 nodata             }
 //!         ),
 //!     }],
 //! };
@@ -165,19 +164,29 @@
 // ```
 
 use std::path::PathBuf;
+use std::ffi::CString;
 
 pub mod big_endian;
 pub mod little_endian;
 
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Hash, Eq, Ord)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Hash, Eq, Ord)]
 pub enum ParseError<'a> {
     WrongInputSize { expected_len: u8, got: &'a [u8] },
-    UnableToParseBool([u8;2], u8),
-    NoEndiannessGiven([u8;2])
+    UnableToParseBool(BoolParseError),
+    NoEndiannessGiven([u8;2]),
+    InvalidPixelType(u8),
+    FromBytesWithNulError(Vec<u8>),
+    PathContainsNonUTF8Chars(CString),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Hash, Eq, Ord)]
 pub struct BoolParseError([u8;2], u8);
+
+impl<'a> From<BoolParseError> for ParseError<'a> {
+    fn from(e: BoolParseError) -> Self {
+        ParseError::UnableToParseBool(e)
+    }
+}
 
 /// Raster data 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -345,8 +354,16 @@ impl Raster {
         let (width_bytes, input) = take_slice_2_bytes(input)?;
         let width = parse_u16_be(width_bytes);
 
-        let (height_bytes, input) = take_slice_2_bytes(input)?;
+        let (height_bytes, mut input) = take_slice_2_bytes(input)?;
         let height = parse_u16_be(height_bytes);
+
+        let mut raster_bands = Vec::with_capacity(nbands as usize);
+
+        for _ in 0..(nbands as usize) {
+            let (raster_band, rt_input) = RasterBand::from_wkb_string_big_endian(input, width, height)?;
+            input = rt_input;
+            raster_bands.push(raster_band);
+        }
 
         Ok(Raster {
             endian: Endian::Big,
@@ -360,7 +377,7 @@ impl Raster {
             srid,
             width,
             height,
-            bands: Vec::new(),
+            bands: raster_bands,
         })
     }
 
@@ -397,8 +414,16 @@ impl Raster {
         let (width_bytes, input) = take_slice_2_bytes(input)?;
         let width = parse_u16_le(width_bytes);
 
-        let (height_bytes, input) = take_slice_2_bytes(input)?;
+        let (height_bytes, mut input) = take_slice_2_bytes(input)?;
         let height = parse_u16_le(height_bytes);
+
+        let mut raster_bands = Vec::with_capacity(nbands as usize);
+
+        for _ in 0..(nbands as usize) {
+            let (raster_band, rt_input) = RasterBand::from_wkb_string_little_endian(input, width, height)?;
+            input = rt_input;
+            raster_bands.push(raster_band);
+        }
 
         Ok(Raster {
             endian: Endian::Little,
@@ -536,7 +561,197 @@ pub struct RasterBand {
     pub data: RasterDataSource,
 }
 
+impl RasterBand {
+    
+    pub fn from_wkb_string_big_endian<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+        use crate::big_endian::*;
+        use self::ParseError::*;
+
+        let (pixinfo_bytes, mut input) = take_slice_1_byte(input)?;
+        let pixinfo = parse_u8_be(pixinfo_bytes);
+        let is_offline = (pixinfo  & 0b10000000 >> 7) != 0;
+        let has_nodata_value = (pixinfo  & 0b01000000 >> 6) != 0;
+        let is_nodata_value = (pixinfo  & 0b00100000 >> 5) != 0; // ??
+        let pixtype = pixinfo & 0b00001111;
+
+        let pixtype = match pixtype {
+            0 => {
+                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                let nodata = if has_nodata_value { Some(parse_bool_be(nodata_bytes)?) } else { None };
+                input = pt_input;
+                PixType::Bool1Bit(nodata)
+            },
+            1 => {
+                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                let nodata = if has_nodata_value { Some(parse_u8_be(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::UInt2(nodata)
+            },
+            2 => {
+                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                let nodata = if has_nodata_value { Some(parse_u8_be(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::UInt4(nodata)
+            },
+            3 => {
+                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                let nodata = if has_nodata_value { Some(parse_i8_be(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::Int8(nodata)
+            },
+            4 => {
+                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                let nodata = if has_nodata_value { Some(parse_u8_be(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::UInt8(nodata)
+            },
+            5 => {
+                let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_i16_be(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::Int16(nodata)
+            },
+            6 => {
+                let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_u16_be(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::UInt16(nodata)
+            },
+            7 => {
+                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_i32_be(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::Int32(nodata)
+            },
+            8 => {
+                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_u32_be(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::UInt32(nodata)
+            },
+            10 => {
+                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_f32_be(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::Float32(nodata)
+            },
+            11 => {
+                let (nodata_bytes, pt_input) = take_slice_8_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_f64_be(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::Float64(nodata)
+            }, 
+            other => return Err(InvalidPixelType(other)),
+        };
+
+        let (raster_data_source, input) = if is_offline {
+            RasterDataSource::parse_offline_big_endian(input, pixtype)?
+        } else {
+            RasterDataSource::parse_memory_big_endian(input, pixtype, width, height)?
+        };
+
+        Ok((RasterBand {
+            is_nodata_value,
+            data: raster_data_source,
+        }, input))
+    }
+
+    pub fn from_wkb_string_little_endian<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+        use crate::little_endian::*;
+        use self::ParseError::*;
+
+        let (pixinfo_bytes, mut input) = take_slice_1_byte(input)?;
+        let pixinfo = parse_u8_le(pixinfo_bytes);
+        let is_offline = (pixinfo  & 0b10000000 >> 7) != 0;
+        let has_nodata_value = (pixinfo  & 0b01000000 >> 6) != 0;
+        let is_nodata_value = (pixinfo  & 0b00100000 >> 5) != 0; // ??
+        let pixtype = pixinfo & 0b00001111;
+
+        let pixtype = match pixtype {
+            0 => {
+                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                let nodata = if has_nodata_value { Some(parse_bool_le(nodata_bytes)?) } else { None };
+                input = pt_input;
+                PixType::Bool1Bit(nodata)
+            },
+            1 => {
+                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                let nodata = if has_nodata_value { Some(parse_u8_le(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::UInt2(nodata)
+            },
+            2 => {
+                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                let nodata = if has_nodata_value { Some(parse_u8_le(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::UInt4(nodata)
+            },
+            3 => {
+                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                let nodata = if has_nodata_value { Some(parse_i8_le(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::Int8(nodata)
+            },
+            4 => {
+                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                let nodata = if has_nodata_value { Some(parse_u8_le(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::UInt8(nodata)
+            },
+            5 => {
+                let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_i16_le(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::Int16(nodata)
+            },
+            6 => {
+                let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_u16_le(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::UInt16(nodata)
+            },
+            7 => {
+                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_i32_le(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::Int32(nodata)
+            },
+            8 => {
+                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_u32_le(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::UInt32(nodata)
+            },
+            10 => {
+                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_f32_le(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::Float32(nodata)
+            },
+            11 => {
+                let (nodata_bytes, pt_input) = take_slice_8_bytes(input)?;
+                let nodata = if has_nodata_value { Some(parse_f64_le(nodata_bytes)) } else { None };
+                input = pt_input;
+                PixType::Float64(nodata)
+            }, 
+            other => return Err(InvalidPixelType(other)),
+        };
+
+        let (raster_data_source, input) = if is_offline {
+            RasterDataSource::parse_offline_little_endian(input, pixtype)?
+        } else {
+            RasterDataSource::parse_memory_little_endian(input, pixtype, width, height)?
+        };
+        
+        Ok((RasterBand {
+            is_nodata_value,
+            data: raster_data_source,
+        }, input))
+    }
+}
+
 impl RasterDataSource {
+    
     /// Returns `true` if the item is a `Offline { .. }` item
     pub fn is_offline(&self) -> bool {
         use self::RasterDataSource::*;
@@ -552,6 +767,188 @@ impl RasterDataSource {
             Offline(o) => o.pixtype,
             InMemory(i) => i.get_pixtype(),
         }
+    }
+
+    fn parse_offline_big_endian<'a>(input: &'a [u8], pixtype: PixType) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+        use crate::big_endian::*;
+        use std::ffi::CStr;
+
+        let (band_bytes, mut input) = take_slice_1_byte(input)?;
+        let band = parse_i8_be(band_bytes);
+
+        let mut path_bytes = Vec::new();
+        loop {
+
+            let (byte, new_input) = take_slice_1_byte(input)?;
+            input = new_input;
+            let parsed = parse_u8_be(byte);
+            path_bytes.push(parsed);
+
+            if parsed == b'\0' {
+                break; 
+            }
+        }
+
+        let path = CStr::from_bytes_with_nul(&path_bytes)
+        .map_err(|_| ParseError::FromBytesWithNulError(path_bytes.clone()))?;
+        let path = CString::from(path);
+        let path = PathBuf::from(path.clone().into_string()
+            .map_err(|_| ParseError::PathContainsNonUTF8Chars(path.to_owned()))?);
+        
+        Ok((RasterDataSource::Offline(OfflineRasterData {
+            band,
+            path,
+            pixtype,
+        }), input))
+
+    }
+
+    fn parse_offline_little_endian<'a>(input: &'a [u8], pixtype: PixType) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+
+        use crate::little_endian::*;
+        use std::ffi::CStr;
+
+        let (band_bytes, mut input) = take_slice_1_byte(input)?;
+        let band = parse_i8_le(band_bytes);
+
+        let mut path_bytes = Vec::new();
+        loop {
+
+            let (byte, new_input) = take_slice_1_byte(input)?;
+            input = new_input;
+            let parsed = parse_u8_le(byte);
+            path_bytes.push(parsed);
+
+            if parsed == b'\0' {
+                break; 
+            }
+        }
+
+        let path = CStr::from_bytes_with_nul(&path_bytes)
+        .map_err(|_| ParseError::FromBytesWithNulError(path_bytes.clone()))?;
+        let path = CString::from(path);
+        let path = PathBuf::from(path.clone().into_string()
+            .map_err(|_| ParseError::PathContainsNonUTF8Chars(path.to_owned()))?);
+        
+        Ok((RasterDataSource::Offline(OfflineRasterData {
+            band,
+            path,
+            pixtype,
+        }), input))
+    }
+
+    fn parse_memory_big_endian<'a>(input: &'a [u8], pixtype: PixType, width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+
+        fn parse_memory_data_bool_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<bool>>, &'a [u8]), ParseError<'a>> {
+            Ok((vec![vec![]], input))
+        }
+
+        fn parse_memory_data_uint2_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<u8>>, &'a [u8]), ParseError<'a>> {
+            Ok((vec![vec![]], input))
+        }
+
+        fn parse_memory_data_uint4_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<u8>>, &'a [u8]), ParseError<'a>> {
+            Ok((vec![vec![]], input))
+        }
+
+        fn parse_memory_data_int8_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<i8>>, &'a [u8]), ParseError<'a>> {
+            Ok((vec![vec![]], input))
+        }
+
+        fn parse_memory_data_uint8_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<u8>>, &'a [u8]), ParseError<'a>> {
+            Ok((vec![vec![]], input))
+        }
+
+        fn parse_memory_data_int16_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<i16>>, &'a [u8]), ParseError<'a>> {
+            Ok((vec![vec![]], input))
+        }
+
+        fn parse_memory_data_uint16_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<u16>>, &'a [u8]), ParseError<'a>> {
+            Ok((vec![vec![]], input))
+        }
+
+        fn parse_memory_data_int32_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<i32>>, &'a [u8]), ParseError<'a>> {
+            Ok((vec![vec![]], input))
+        }
+
+        fn parse_memory_data_uint32_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<u32>>, &'a [u8]), ParseError<'a>> {
+            Ok((vec![vec![]], input))
+        }
+
+        fn parse_memory_data_f32_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<f32>>, &'a [u8]), ParseError<'a>> {
+            Ok((vec![vec![]], input))
+        }
+
+        fn parse_memory_data_f64_be<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Vec<Vec<f64>>, &'a [u8]), ParseError<'a>> {
+            Ok((vec![vec![]], input))
+        }
+
+        let mut input = input;
+
+        let data = match pixtype {
+            PixType::Bool1Bit(nodata)   => {
+                let (data, new_memory_input) = parse_memory_data_bool_be(input, width, height)?;
+                input = new_memory_input;
+                InMemoryRasterData::Bool1Bit { data, nodata }
+            },
+            PixType::UInt2(nodata)      => {
+                let (data, new_memory_input) = parse_memory_data_uint2_be(input, width, height)?;
+                input = new_memory_input;
+                InMemoryRasterData::UInt2 { data, nodata }
+            },
+            PixType::UInt4(nodata)      => {
+                let (data, new_memory_input) = parse_memory_data_uint4_be(input, width, height)?;
+                input = new_memory_input;
+                InMemoryRasterData::UInt4 { data, nodata }
+            },
+            PixType::Int8(nodata)       => {
+                let (data, new_memory_input) = parse_memory_data_int8_be(input, width, height)?;
+                input = new_memory_input;
+                InMemoryRasterData::Int8 { data, nodata }
+            },
+            PixType::UInt8(nodata)      => {
+                let (data, new_memory_input) = parse_memory_data_uint8_be(input, width, height)?;
+                input = new_memory_input;
+                InMemoryRasterData::UInt8 { data, nodata }
+            },
+            PixType::Int16(nodata)      => {
+                let (data, new_memory_input) = parse_memory_data_int16_be(input, width, height)?;
+                input = new_memory_input;
+                InMemoryRasterData::Int16 { data, nodata }
+            },
+            PixType::UInt16(nodata)     => {
+                let (data, new_memory_input) = parse_memory_data_uint16_be(input, width, height)?;
+                input = new_memory_input;
+                InMemoryRasterData::UInt16 { data, nodata }
+            },
+            PixType::Int32(nodata)      => {
+                let (data, new_memory_input) = parse_memory_data_int32_be(input, width, height)?;
+                input = new_memory_input;
+                InMemoryRasterData::Int32 { data, nodata }
+            },
+            PixType::UInt32(nodata)     => {
+                let (data, new_memory_input) = parse_memory_data_uint32_be(input, width, height)?;
+                input = new_memory_input;
+                InMemoryRasterData::UInt32 { data, nodata }
+            },
+            PixType::Float32(nodata)    => {
+                let (data, new_memory_input) = parse_memory_data_f32_be(input, width, height)?;
+                input = new_memory_input;
+                InMemoryRasterData::Float32 { data, nodata }
+            },
+            PixType::Float64(nodata)    => {
+                let (data, new_memory_input) = parse_memory_data_f64_be(input, width, height)?;
+                input = new_memory_input;
+                InMemoryRasterData::Float64 { data, nodata }
+            },
+        };
+
+        Ok((RasterDataSource::InMemory(data), input))
+    }
+
+    fn parse_memory_little_endian<'a>(input: &'a [u8], pixtype: PixType, width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+        unimplemented!()
+        // Ok((RasterDataSource::InMemory(data), input))
     }
 }
 
@@ -733,7 +1130,11 @@ impl RasterDataSource {
                 // write band id
                 write_i8_be(&mut s, band);
                 // write file path
-                s.append(&mut path.as_os_str().to_string_lossy().as_bytes().to_vec());
+                let path: Vec<u8> = path.as_os_str().to_string_lossy().as_bytes().to_vec();
+                let cstring = unsafe { CString::from_vec_unchecked(path) };
+                for byte in cstring.to_bytes_with_nul() {
+                    write_u8_be(&mut s, *byte);
+                }
             },
             InMemory(data) => {
                 match data {
@@ -768,7 +1169,12 @@ impl RasterDataSource {
                 // write band id
                 write_i8_le(&mut s, band);
                 // write file path
-                s.append(&mut path.as_os_str().to_string_lossy().as_bytes().to_vec());
+                let path: Vec<u8> = path.as_os_str().to_string_lossy().as_bytes().to_vec();
+                let cstring = unsafe { CString::from_vec_unchecked(path) };
+                for byte in cstring.into_bytes_with_nul() {
+                    let byte: u8 = byte; // rustc is dumb
+                    write_u8_le(&mut s, byte);
+                }
             },
             InMemory(data) => {
                 match data {

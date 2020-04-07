@@ -90,7 +90,6 @@ pub fn parse_i8_le(input: [u8;2]) -> i8 {
     i8::from_le_bytes([hex_chars_to_byte_le(input)])
 }
 
-
 #[inline]
 pub fn parse_u8_le(input: [u8;2]) -> u8 {
     u8::from_le_bytes([hex_chars_to_byte_le(input)])
