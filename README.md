@@ -10,6 +10,8 @@ input/output.
 
 ## Example
 
+### Raster to WKB string
+
 ```rust
 use wkb_raster::{Raster, RasterBand, RasterDataSource, InMemoryRasterData, Endian};
 
@@ -32,11 +34,11 @@ let raster = Raster {
     width: 2,               // pixel columns
     height: 2,              // rows
     bands: vec![RasterBand {
-        is_nodata_value: false,                     // See documentation, usually false
+        is_nodata_value: false           // true only if entire band is NODATA
         data: RasterDataSource::InMemory(
             InMemoryRasterData::UInt8 {
                 data: bytes,
-                nodata: None,
+                nodata
             }
         ),
     }],
@@ -46,6 +48,43 @@ assert_eq!(
     raster.to_wkb_string(),
     String::from("00000000013FF00000000000003FF00000000000000000000000000000000000000000000000000000000000000000000000000000000010E600020002040000010100")
 );
+```
+
+### WKB string to raster
+
+```rust
+use wkb_raster::{Raster, RasterBand, RasterDataSource, InMemoryRasterData, Endian};
+
+let parsed_raster = Raster::from_wkb_string(b"00000000013FF00000000000003FF00000000000000000000000000000000000000000000000000000000000000000000000000000000010E600020002040000010100").unwrap();
+
+// 2x2 image bytes, u8 format
+let bytes = vec![
+    vec![0, 1],
+    vec![1, 0],
+];
+
+assert_eq!(parsed_raster, Raster {
+    endian: Endian::Big,
+    version: 0,
+    scale_x: 1.0,
+    scale_y: 1.0,
+    ip_x: 0.0,
+    ip_y: 0.0,
+    skew_x: 0.0,
+    skew_y: 0.0,
+    srid: 4326,
+    width: 2,
+    height: 2,
+    bands: vec![RasterBand {
+        is_nodata_value: false,
+        data: RasterDataSource::InMemory(
+            InMemoryRasterData::UInt8 {
+                data: bytes,
+                nodata
+            }
+        ),
+    }],
+});
 ```
 
 License: MIT
