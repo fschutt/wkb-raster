@@ -22,7 +22,11 @@ fn run_test_inner(endian: Endian, input: InMemoryRasterData, width: u16, height:
 
     let encoded = setup.clone().to_wkb_string();
     let decoded = Raster::from_wkb_string(&encoded.as_bytes()).unwrap();
-    assert_eq!(decoded, setup);
+    if decoded != setup {
+        use std::process::exit;
+        println!("expected: {:#?}\n\ngot:{:#?}", setup, decoded);
+        exit(1);
+    }
 }
 
 fn run_test(input: InMemoryRasterData, width: u16, height: u16) {

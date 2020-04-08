@@ -191,7 +191,7 @@ macro_rules! parse_memory_data_fns {(
 
         let width = width as usize;
         let height = height as usize;
-        
+
         // total bytes necessary = 2*width*height*pix_depth
         let total_bytes_necessary = 2 * width as usize * height as usize * 2;
         if input.len() < total_bytes_necessary { return Err(ParseError::WrongInputSize { expected_len: total_bytes_necessary, got: input }); }

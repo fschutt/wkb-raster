@@ -439,7 +439,7 @@ impl Raster {
             srid,
             width,
             height,
-            bands: Vec::new(),
+            bands: raster_bands,
         })
     }
 
@@ -565,86 +565,155 @@ pub struct RasterBand {
 
 impl RasterBand {
     
-    pub fn from_wkb_string_big_endian<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+    fn from_wkb_string_big_endian<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
         use crate::big_endian::*;
         use self::ParseError::*;
 
+
         let (pixinfo_bytes, mut input) = take_slice_1_byte(input)?;
         let pixinfo = parse_u8_be(pixinfo_bytes);
-        let is_offline = (pixinfo  & 0b10000000 >> 7) != 0;
-        let has_nodata_value = (pixinfo  & 0b01000000 >> 6) != 0;
-        let is_nodata_value = (pixinfo  & 0b00100000 >> 5) != 0; // ??
+        let is_offline = ((pixinfo  & 0b10000000) >> 7) != 0;
+        let has_nodata_value = ((pixinfo  & 0b01000000) >> 6) != 0;
+        let is_nodata_value = ((pixinfo  & 0b00100000) >> 5) != 0; // ??
         let pixtype = pixinfo & 0b00001111;
+
 
         let pixtype = match pixtype {
             0 => {
-                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
-                let nodata = if has_nodata_value { Some(parse_bool_be(nodata_bytes)?) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    Some(parse_bool_be(nodata_bytes)?) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Bool1Bit(nodata)
             },
             1 => {
-                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
-                let nodata = if has_nodata_value { Some(parse_u8_be(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    Some(parse_u8_be(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::UInt2(nodata)
             },
             2 => {
-                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
-                let nodata = if has_nodata_value { Some(parse_u8_be(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    Some(parse_u8_be(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::UInt4(nodata)
             },
             3 => {
-                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
-                let nodata = if has_nodata_value { Some(parse_i8_be(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    Some(parse_i8_be(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Int8(nodata)
             },
             4 => {
-                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
-                let nodata = if has_nodata_value { Some(parse_u8_be(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    Some(parse_u8_be(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::UInt8(nodata)
             },
             5 => {
-                let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_i16_be(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_i16_be(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Int16(nodata)
             },
             6 => {
-                let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_u16_be(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_u16_be(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::UInt16(nodata)
             },
             7 => {
-                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_i32_be(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_i32_be(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Int32(nodata)
             },
             8 => {
-                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_u32_be(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_u32_be(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::UInt32(nodata)
             },
             10 => {
-                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_f32_be(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_f32_be(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Float32(nodata)
             },
             11 => {
-                let (nodata_bytes, pt_input) = take_slice_8_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_f64_be(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_8_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_f64_be(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Float64(nodata)
             }, 
             other => return Err(InvalidPixelType(other)),
         };
+
 
         let (raster_data_source, input) = if is_offline {
             RasterDataSource::parse_offline_big_endian(input, pixtype)?
@@ -652,88 +721,157 @@ impl RasterBand {
             RasterDataSource::parse_memory_big_endian(input, pixtype, width, height)?
         };
 
+
         Ok((RasterBand {
             is_nodata_value,
             data: raster_data_source,
         }, input))
     }
 
-    pub fn from_wkb_string_little_endian<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+    fn from_wkb_string_little_endian<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
         use crate::little_endian::*;
         use self::ParseError::*;
 
+
         let (pixinfo_bytes, mut input) = take_slice_1_byte(input)?;
         let pixinfo = parse_u8_le(pixinfo_bytes);
-        let is_offline = (pixinfo  & 0b10000000 >> 7) != 0;
-        let has_nodata_value = (pixinfo  & 0b01000000 >> 6) != 0;
-        let is_nodata_value = (pixinfo  & 0b00100000 >> 5) != 0; // ??
+        let is_offline = ((pixinfo  & 0b10000000) >> 7) != 0;
+        let has_nodata_value = ((pixinfo  & 0b01000000) >> 6) != 0;
+        let is_nodata_value = ((pixinfo  & 0b00100000) >> 5) != 0; // ??
         let pixtype = pixinfo & 0b00001111;
+
 
         let pixtype = match pixtype {
             0 => {
-                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
-                let nodata = if has_nodata_value { Some(parse_bool_le(nodata_bytes)?) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    Some(parse_bool_le(nodata_bytes)?) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Bool1Bit(nodata)
             },
             1 => {
-                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
-                let nodata = if has_nodata_value { Some(parse_u8_le(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    Some(parse_u8_le(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::UInt2(nodata)
             },
             2 => {
-                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
-                let nodata = if has_nodata_value { Some(parse_u8_le(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    Some(parse_u8_le(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::UInt4(nodata)
             },
             3 => {
-                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
-                let nodata = if has_nodata_value { Some(parse_i8_le(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    Some(parse_i8_le(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Int8(nodata)
             },
             4 => {
-                let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
-                let nodata = if has_nodata_value { Some(parse_u8_le(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    Some(parse_u8_le(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::UInt8(nodata)
             },
             5 => {
-                let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_i16_le(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_i16_le(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Int16(nodata)
             },
             6 => {
-                let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_u16_le(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_2_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_u16_le(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::UInt16(nodata)
             },
             7 => {
-                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_i32_le(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_i32_le(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Int32(nodata)
             },
             8 => {
-                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_u32_le(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_u32_le(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::UInt32(nodata)
             },
             10 => {
-                let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_f32_le(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_4_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_f32_le(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Float32(nodata)
             },
             11 => {
-                let (nodata_bytes, pt_input) = take_slice_8_bytes(input)?;
-                let nodata = if has_nodata_value { Some(parse_f64_le(nodata_bytes)) } else { None };
-                input = pt_input;
+                let nodata = if has_nodata_value { 
+                    let (nodata_bytes, pt_input) = take_slice_8_bytes(input)?;
+                    input = pt_input;
+                    Some(parse_f64_le(nodata_bytes)) 
+                } else { 
+                    let (_, pt_input) = take_slice_1_byte(input)?;
+                    input = pt_input;
+                    None 
+                };
                 PixType::Float64(nodata)
             }, 
             other => return Err(InvalidPixelType(other)),
@@ -744,7 +882,8 @@ impl RasterBand {
         } else {
             RasterDataSource::parse_memory_little_endian(input, pixtype, width, height)?
         };
-        
+
+
         Ok((RasterBand {
             is_nodata_value,
             data: raster_data_source,
@@ -841,6 +980,7 @@ impl RasterDataSource {
 
     fn parse_memory_big_endian<'a>(input: &'a [u8], pixtype: PixType, width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
 
+
         parse_memory_data_fns!(
             crate::big_endian,
 
@@ -868,6 +1008,7 @@ impl RasterDataSource {
             parse_f32_be,
             parse_f64_be,
         );
+
         let ret = gen_parse_function_body!(
             parse_memory_data_bool_be,
             parse_memory_data_uint2_be,
@@ -886,10 +1027,13 @@ impl RasterDataSource {
             width,
             height,
         );
+
         ret
     }
 
     fn parse_memory_little_endian<'a>(input: &'a [u8], pixtype: PixType, width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+        
+
         parse_memory_data_fns!(
             crate::little_endian,
 
@@ -917,6 +1061,7 @@ impl RasterDataSource {
             parse_f32_le,
             parse_f64_le,
         );
+
         let ret = gen_parse_function_body!(
             parse_memory_data_bool_le,
             parse_memory_data_uint2_le,
@@ -935,6 +1080,7 @@ impl RasterDataSource {
             width,
             height,
         );
+
         ret
     }
 }
