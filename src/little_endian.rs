@@ -132,36 +132,6 @@ pub fn parse_u32_le(input: [u8;8]) -> u32 {
 }
 
 #[inline]
-pub fn parse_i64_le(input: [u8;16]) -> i64 {
-    i64::from_le_bytes([
-        hex_chars_to_byte_le([input[0], input[1]]),
-        hex_chars_to_byte_le([input[2], input[3]]),
-        hex_chars_to_byte_le([input[4], input[5]]),
-        hex_chars_to_byte_le([input[6], input[7]]),
-
-        hex_chars_to_byte_le([input[8], input[9]]),
-        hex_chars_to_byte_le([input[10], input[11]]),
-        hex_chars_to_byte_le([input[12], input[13]]),
-        hex_chars_to_byte_le([input[14], input[15]]),
-    ])
-}
-
-#[inline]
-pub fn parse_u64_le(input: [u8;16]) -> u64 {
-    u64::from_le_bytes([
-        hex_chars_to_byte_le([input[0], input[1]]),
-        hex_chars_to_byte_le([input[2], input[3]]),
-        hex_chars_to_byte_le([input[4], input[5]]),
-        hex_chars_to_byte_le([input[6], input[7]]),
-        
-        hex_chars_to_byte_le([input[8], input[9]]),
-        hex_chars_to_byte_le([input[10], input[11]]),
-        hex_chars_to_byte_le([input[12], input[13]]),
-        hex_chars_to_byte_le([input[14], input[15]]),
-    ])
-}
-
-#[inline]
 pub fn parse_f32_le(input: [u8;8]) -> f32 {
     f32::from_le_bytes([
         hex_chars_to_byte_le([input[0], input[1]]),
