@@ -7,6 +7,8 @@
 //! input/output.
 //!
 //! # Example
+//!
+//! ## Raster to WKB string
 //! 
 //! ```rust
 //! use wkb_raster::{Raster, RasterBand, RasterDataSource, InMemoryRasterData, Endian};
@@ -30,11 +32,12 @@
 //!     width: 2,               // pixel columns
 //!     height: 2,              // rows
 //!     bands: vec![RasterBand {
-//!         is_nodata_value: false,                     // See documentation, usually false
+//!         is_nodata_value: false           // true only if entire band is NODATA
 //!         data: RasterDataSource::InMemory(
 //!             InMemoryRasterData::UInt8 {
 //!                 data: bytes,
-//!                 nodata             }
+//!                 nodata
+//!             }
 //!         ),
 //!     }],
 //! };
@@ -43,6 +46,43 @@
 //!     raster.to_wkb_string(), 
 //!     String::from("00000000013FF00000000000003FF00000000000000000000000000000000000000000000000000000000000000000000000000000000010E600020002040000010100")
 //! );
+//! ```
+//!
+//! ## WKB string to raster
+//! 
+//! ```rust
+//! use wkb_raster::{Raster, RasterBand, RasterDataSource, InMemoryRasterData, Endian};
+//!
+//! let parsed_raster = Raster::from_wkb_string(b"00000000013FF00000000000003FF00000000000000000000000000000000000000000000000000000000000000000000000000000000010E600020002040000010100").unwrap();
+//! 
+//! // 2x2 image bytes, u8 format
+//! let bytes = vec![
+//!     vec![0, 1], 
+//!     vec![1, 0],
+//! ];
+//! 
+//! assert_eq!(parsed_raster, Raster {
+//!     endian: Endian::Big,
+//!     version: 0,
+//!     scale_x: 1.0,
+//!     scale_y: 1.0,
+//!     ip_x: 0.0,
+//!     ip_y: 0.0,
+//!     skew_x: 0.0,
+//!     skew_y: 0.0,
+//!     srid: 4326,
+//!     width: 2,
+//!     height: 2,
+//!     bands: vec![RasterBand {
+//!         is_nodata_value: false,
+//!         data: RasterDataSource::InMemory(
+//!             InMemoryRasterData::UInt8 {
+//!                 data: bytes,
+//!                 nodata
+//!             }
+//!         ),
+//!     }],
+//! });
 //! ```
 
 // ```ignore
@@ -168,8 +208,8 @@ use std::ffi::CString;
 
 #[macro_use]
 mod parse_memory_data;
-pub mod big_endian;
-pub mod little_endian;
+mod big_endian;
+mod little_endian;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Hash, Eq, Ord)]
 pub enum ParseError<'a> {
@@ -220,7 +260,7 @@ pub struct Raster {
 }
 
 #[inline]
-pub fn take_slice_1_byte<'a>(input: &'a [u8]) -> Result<([u8;2], &'a [u8]), ParseError<'a>> {
+fn take_slice_1_byte<'a>(input: &'a [u8]) -> Result<([u8;2], &'a [u8]), ParseError<'a>> {
     use self::ParseError::*;
     const MIN_LEN: usize = 2;
     if input.len() < MIN_LEN { 
@@ -234,7 +274,7 @@ pub fn take_slice_1_byte<'a>(input: &'a [u8]) -> Result<([u8;2], &'a [u8]), Pars
 }
 
 #[inline]
-pub fn take_slice_2_bytes<'a>(input: &'a [u8]) -> Result<([u8;4], &'a [u8]), ParseError<'a>> {
+fn take_slice_2_bytes<'a>(input: &'a [u8]) -> Result<([u8;4], &'a [u8]), ParseError<'a>> {
     use self::ParseError::*;
     const MIN_LEN: usize = 4;
     if input.len() < MIN_LEN { 
@@ -250,7 +290,7 @@ pub fn take_slice_2_bytes<'a>(input: &'a [u8]) -> Result<([u8;4], &'a [u8]), Par
 }
 
 #[inline]
-pub fn take_slice_4_bytes<'a>(input: &'a [u8]) -> Result<([u8;8], &'a [u8]), ParseError<'a>> {
+fn take_slice_4_bytes<'a>(input: &'a [u8]) -> Result<([u8;8], &'a [u8]), ParseError<'a>> {
     use self::ParseError::*;
     const MIN_LEN: usize = 8;
     if input.len() < MIN_LEN { 
@@ -270,7 +310,7 @@ pub fn take_slice_4_bytes<'a>(input: &'a [u8]) -> Result<([u8;8], &'a [u8]), Par
 }
 
 #[inline]
-pub fn take_slice_8_bytes<'a>(input: &'a [u8]) -> Result<([u8;16], &'a [u8]), ParseError<'a>> {
+fn take_slice_8_bytes<'a>(input: &'a [u8]) -> Result<([u8;16], &'a [u8]), ParseError<'a>> {
     use self::ParseError::*;
     const MIN_LEN: usize = 16;
     if input.len() < MIN_LEN { 
