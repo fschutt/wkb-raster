@@ -212,8 +212,8 @@ mod big_endian;
 mod little_endian;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Hash, Eq, Ord)]
-pub enum ParseError<'a> {
-    WrongInputSize { expected_len: usize, got: &'a [u8] },
+pub enum ParseError {
+    WrongInputSize { expected_len: usize, got: Vec<u8> },
     UnableToParseBool(BoolParseError),
     NoEndiannessGiven([u8;2]),
     InvalidPixelType(u8),
@@ -224,7 +224,7 @@ pub enum ParseError<'a> {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Hash, Eq, Ord)]
 pub struct BoolParseError([u8;2], u8);
 
-impl<'a> From<BoolParseError> for ParseError<'a> {
+impl From<BoolParseError> for ParseError {
     fn from(e: BoolParseError) -> Self {
         ParseError::UnableToParseBool(e)
     }
@@ -260,11 +260,11 @@ pub struct Raster {
 }
 
 #[inline]
-fn take_slice_1_byte<'a>(input: &'a [u8]) -> Result<([u8;2], &'a [u8]), ParseError<'a>> {
+fn take_slice_1_byte(input: &[u8]) -> Result<([u8;2], &[u8]), ParseError> {
     use self::ParseError::*;
     const MIN_LEN: usize = 2;
     if input.len() < MIN_LEN { 
-        return Err(WrongInputSize { expected_len: MIN_LEN, got: input });
+        return Err(WrongInputSize { expected_len: MIN_LEN, got: input.to_vec() });
     }
     unsafe {
         let a = input.get_unchecked(0);
@@ -274,11 +274,11 @@ fn take_slice_1_byte<'a>(input: &'a [u8]) -> Result<([u8;2], &'a [u8]), ParseErr
 }
 
 #[inline]
-fn take_slice_2_bytes<'a>(input: &'a [u8]) -> Result<([u8;4], &'a [u8]), ParseError<'a>> {
+fn take_slice_2_bytes(input: &[u8]) -> Result<([u8;4], &[u8]), ParseError> {
     use self::ParseError::*;
     const MIN_LEN: usize = 4;
     if input.len() < MIN_LEN { 
-        return Err(WrongInputSize { expected_len: MIN_LEN, got: input });
+        return Err(WrongInputSize { expected_len: MIN_LEN, got: input.to_vec() });
     }
     unsafe {
         let a = input.get_unchecked(0);
@@ -290,11 +290,11 @@ fn take_slice_2_bytes<'a>(input: &'a [u8]) -> Result<([u8;4], &'a [u8]), ParseEr
 }
 
 #[inline]
-fn take_slice_4_bytes<'a>(input: &'a [u8]) -> Result<([u8;8], &'a [u8]), ParseError<'a>> {
+fn take_slice_4_bytes(input: &[u8]) -> Result<([u8;8], &[u8]), ParseError> {
     use self::ParseError::*;
     const MIN_LEN: usize = 8;
     if input.len() < MIN_LEN { 
-        return Err(WrongInputSize { expected_len: MIN_LEN, got: input });
+        return Err(WrongInputSize { expected_len: MIN_LEN, got: input.to_vec() });
     }
     unsafe {
         let a = input.get_unchecked(0);
@@ -310,11 +310,11 @@ fn take_slice_4_bytes<'a>(input: &'a [u8]) -> Result<([u8;8], &'a [u8]), ParseEr
 }
 
 #[inline]
-fn take_slice_8_bytes<'a>(input: &'a [u8]) -> Result<([u8;16], &'a [u8]), ParseError<'a>> {
+fn take_slice_8_bytes(input: &[u8]) -> Result<([u8;16], &[u8]), ParseError> {
     use self::ParseError::*;
     const MIN_LEN: usize = 16;
     if input.len() < MIN_LEN { 
-        return Err(WrongInputSize { expected_len: MIN_LEN, got: input });
+        return Err(WrongInputSize { expected_len: MIN_LEN, got: input.to_vec() });
     }
     unsafe {
         let a = input.get_unchecked(0);
@@ -353,7 +353,7 @@ impl Raster {
         }
     }
 
-    pub fn from_wkb_string<'a>(string_bytes: &'a [u8]) -> Result<Self, ParseError<'a>> {
+    pub fn from_wkb_string(string_bytes: &[u8]) -> Result<Self, ParseError> {
         use self::ParseError::*;
         match take_slice_1_byte(string_bytes)? {
             ([b'0', b'0'], input) => Self::from_wkb_string_big_endian(input),
@@ -362,7 +362,7 @@ impl Raster {
         }
     }
 
-    fn from_wkb_string_big_endian<'a>(input: &'a [u8]) -> Result<Self, ParseError<'a>> {
+    fn from_wkb_string_big_endian(input: &[u8]) -> Result<Self, ParseError> {
 
         use crate::big_endian::*;
         
@@ -423,7 +423,7 @@ impl Raster {
         })
     }
 
-    fn from_wkb_string_little_endian<'a>(input: &'a [u8]) -> Result<Self, ParseError<'a>> {
+    fn from_wkb_string_little_endian(input: &[u8]) -> Result<Self, ParseError> {
         use crate::little_endian::*;
         
         let (version_bytes, input) = take_slice_2_bytes(input)?;
@@ -605,7 +605,7 @@ pub struct RasterBand {
 
 impl RasterBand {
     
-    fn from_wkb_string_big_endian<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+    fn from_wkb_string_big_endian(input: &[u8], width: u16, height: u16) -> Result<(Self, &[u8]), ParseError> {
         use crate::big_endian::*;
         use self::ParseError::*;
 
@@ -768,7 +768,7 @@ impl RasterBand {
         }, input))
     }
 
-    fn from_wkb_string_little_endian<'a>(input: &'a [u8], width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+    fn from_wkb_string_little_endian(input: &[u8], width: u16, height: u16) -> Result<(Self, &[u8]), ParseError> {
         use crate::little_endian::*;
         use self::ParseError::*;
 
@@ -950,7 +950,7 @@ impl RasterDataSource {
         }
     }
 
-    fn parse_offline_big_endian<'a>(input: &'a [u8], pixtype: PixType) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+    fn parse_offline_big_endian(input: &[u8], pixtype: PixType) -> Result<(Self, &[u8]), ParseError> {
         use crate::big_endian::*;
         use std::ffi::CStr;
 
@@ -984,7 +984,7 @@ impl RasterDataSource {
 
     }
 
-    fn parse_offline_little_endian<'a>(input: &'a [u8], pixtype: PixType) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+    fn parse_offline_little_endian(input: &[u8], pixtype: PixType) -> Result<(Self, &[u8]), ParseError> {
 
         use crate::little_endian::*;
         use std::ffi::CStr;
@@ -1018,7 +1018,7 @@ impl RasterDataSource {
         }), input))
     }
 
-    fn parse_memory_big_endian<'a>(input: &'a [u8], pixtype: PixType, width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+    fn parse_memory_big_endian(input: &[u8], pixtype: PixType, width: u16, height: u16) -> Result<(Self, &[u8]), ParseError> {
 
 
         parse_memory_data_fns!(
@@ -1071,7 +1071,7 @@ impl RasterDataSource {
         ret
     }
 
-    fn parse_memory_little_endian<'a>(input: &'a [u8], pixtype: PixType, width: u16, height: u16) -> Result<(Self, &'a [u8]), ParseError<'a>> {
+    fn parse_memory_little_endian(input: &[u8], pixtype: PixType, width: u16, height: u16) -> Result<(Self, &[u8]), ParseError> {
         
 
         parse_memory_data_fns!(
