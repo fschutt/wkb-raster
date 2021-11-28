@@ -70,8 +70,21 @@ pub fn write_f64_le(s: &mut Vec<u8>, input: f64) {
 pub fn hex_chars_to_byte_le([msb, lsb]: [u8;2]) -> u8 {
 
     // convert to byte
-    let (msb, _) = if msb > 64 { msb.overflowing_sub(55) } else { msb.overflowing_sub(48) };
-    let (lsb, _) = if lsb > 64 { lsb.overflowing_sub(55) } else { lsb.overflowing_sub(48) };
+    let (msb, _) = if msb > 96 {
+        msb.overflowing_sub(87)
+    } else if msb > 64 {
+        msb.overflowing_sub(55)
+    } else {
+        msb.overflowing_sub(48)
+    };
+
+    let (lsb, _) = if lsb > 96 {
+        lsb.overflowing_sub(87)
+    } else if lsb > 64 {
+        lsb.overflowing_sub(55)
+    } else {
+        lsb.overflowing_sub(48)
+    };
     
     lsb + (msb << 4)
 }
