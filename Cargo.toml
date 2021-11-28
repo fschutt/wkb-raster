@@ -1,6 +1,6 @@
 [package]
 name = "wkb-raster"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Felix Schütt <felix.schuett@maps4print.com>"]
 edition = "2018"
 description = "Library to serialize raster data to the PostGIS RASTER Well Known Binary format"
